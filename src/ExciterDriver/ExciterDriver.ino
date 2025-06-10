@@ -219,6 +219,7 @@ void setup() {
   stateEntryTime = millis();
   blinkStatusLed(engineState + 1);
   initialized = true;
+  // System is now fully operational and entering the main loop.
   DBG_PRINTLN(F("Initialization complete."));
 }
 
