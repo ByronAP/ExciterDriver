@@ -1,0 +1,48 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <title>ExciterDriver Tighter Wind 'E' Emblem Logo</title>
+  <desc>A hexagonal shield containing the letter 'E' formed from tightly wound electrical inductor symbols.</desc>
+  
+  <!-- Background Hexagonal Shield -->
+  <g id="shield">
+    <path d="M 50,5 L 93,27.5 L 93,72.5 L 50,95 L 7,72.5 L 7,27.5 Z" 
+          fill="#0A2B4C" 
+          stroke="#335A80" 
+          stroke-width="1.5"/>
+  </g>
+  
+  <!-- Winding 'E' Symbol -->
+  <g id="winding-e" 
+     fill="none" 
+     stroke="#FFFFFF" 
+     stroke-width="4" 
+     stroke-linecap="round">
+     
+    <!-- Vertical Spine of 'E' -->
+    <line x1="35" y1="28" x2="35" y2="72" />
+    
+    <!-- Top Winding (composed of semi-circles for a "wound" look) -->
+    <path d="M 35,28 
+             A 5 5 0 0 1 45 28
+             A 5 5 0 0 1 55 28
+             A 5 5 0 0 1 65 28
+             L 70 28" />
+             
+    <!-- Middle Winding -->
+    <path d="M 35,50 
+             A 5 5 0 0 1 45 50
+             A 5 5 0 0 1 55 50
+             A 5 5 0 0 1 65 50" />
+             
+    <!-- Bottom Winding -->
+    <path d="M 35,72 
+             A 5 5 0 0 1 45 72
+             A 5 5 0 0 1 55 72
+             A 5 5 0 0 1 65 72
+             L 70 72" />
+  </g>
+  
+  <!-- Accent Node -->
+  <g id="accent-node">
+    <circle cx="35" cy="50" r="4" fill="#FFA500" stroke="white" stroke-width="1.5"/>
+  </g>
+</svg>

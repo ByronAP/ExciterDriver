@@ -1,0 +1,112 @@
+# GitHub Actions: Main Pipeline (Check -> Release)
+#
+# This single pipeline manages both continuous integration checks and releases.
+# It ensures a clean, predictable workflow for all changes.
+#
+# How it works:
+#
+# 1. On Pull Request to `dev`:
+#    - Runs the `build_check` job to lint and compile the code. This validates the PR.
+#
+# 2. On Push to `dev`:
+#    - Runs the `build_check` job to ensure the development head is always stable.
+#
+# 3. On Push to `main` (i.e., a PR is merged from dev):
+#    - Runs the `build_check` job as a final gate.
+#    - If it succeeds, it runs the `create_release` job which:
+#      - Calculates the next patch version.
+#      - Compiles the sketch with the final version string injected.
+#      - Creates the new GitHub Tag and Release with the compiled .hex binary.
+
+name: Main CI & Release Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - dev
+
+jobs:
+  # =========================================================================
+  # == JOB 1: Lint and compile the code on all triggers
+  # =========================================================================
+  build_check:
+    name: Build & Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run arduino-lint
+        uses: arduino/arduino-lint-action@v1
+        with:
+          path: src/ExciterDriver
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR Core
+        run: arduino-cli core install arduino:avr
+      
+      - name: Compile the sketch for verification
+        run: arduino-cli compile --fqbn arduino:avr:nano src/ExciterDriver/ExciterDriver.ino
+
+  # =========================================================================
+  # == JOB 2: Create a release, but ONLY if triggered from `main` branch
+  # =========================================================================
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    
+    # This is the key: This job will only run IF:
+    # 1. The trigger was a push to the 'main' branch.
+    # 2. The 'build_check' job completed successfully.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build_check
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Version Prefix from Code
+        id: version_reader
+        run: |
+          VERSION_PREFIX=$(grep "#define VERSION" src/ExciterDriver/ExciterDriver.ino | sed -E 's/#define VERSION "([0-9]+\.[0-9]+)\..*/\1/')
+          echo "version_prefix=$VERSION_PREFIX" >> $GITHUB_OUTPUT
+
+      - name: Calculate Next Patch Version
+        id: patch_version
+        uses: 'saionaro/extract-package-version@v1.1.0'
+        with:
+          version_prefix: 'v${{ steps.version_reader.outputs.version_prefix }}'
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR Core
+        run: arduino-cli core install arduino:avr
+
+      - name: Compile and Inject Version for Release
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn arduino:avr:nano \
+            --output-dir build \
+            --build-property "compiler.cpp.extra_flags=-DVERSION=\"\\\"${{ steps.patch_version.outputs.version }}\\\"\"" \
+            src/ExciterDriver/ExciterDriver.ino
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.patch_version.outputs.prefixed_version }}
+          name: Release ${{ steps.patch_version.outputs.prefixed_version }}
+          generateReleaseNotes: true
+          artifacts: "build/ExciterDriver.ino.hex"
+          token: ${{ secrets.GITHUB_TOKEN }}
