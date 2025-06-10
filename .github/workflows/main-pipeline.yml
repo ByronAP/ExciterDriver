@@ -84,28 +84,22 @@ jobs:
           # Step 1: Extract MAJOR.MINOR version from the source code
           VERSION_PREFIX=$(grep "#define VERSION" src/ExciterDriver/ExciterDriver.ino | sed -E 's/#define VERSION "([0-9]+\.[0-9]+)\..*/\1/')
           echo "Version prefix found: $VERSION_PREFIX"
-
           # Step 2: Fetch all tags from the remote repository
           git fetch --tags
-
           # Step 3: Find the highest existing patch number for this MAJOR.MINOR version
           # It looks for tags like 'v2.9.0', 'v2.9.1', etc.
           LATEST_PATCH=$(git tag --list "v${VERSION_PREFIX}.*" | sed -E 's/v[0-9]+\.[0-9]+\.//' | sort -rn | head -n 1)
-          
           # Step 4: If no patch was found, start at -1 so the next is 0. Otherwise, use the found number.
           if [[ -z "$LATEST_PATCH" ]]; then
             LATEST_PATCH=-1
           fi
           echo "Latest patch for v${VERSION_PREFIX}.* is: $LATEST_PATCH"
-
           # Step 5: Increment the patch number
           NEXT_PATCH=$((LATEST_PATCH + 1))
           echo "Next patch number will be: $NEXT_PATCH"
-          
           # Step 6: Construct the new version string and tag
           NEW_VERSION_STRING="${VERSION_PREFIX}.${NEXT_PATCH}"
           NEW_TAG="v${NEW_VERSION_STRING}"
-          
           # Step 7: Export these values for subsequent steps to use
           echo "new_version=${NEW_VERSION_STRING}" >> $GITHUB_OUTPUT
           echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
@@ -116,14 +110,22 @@ jobs:
       - name: Install Arduino AVR Core
         run: arduino-cli core install arduino:avr
 
-      - name: Compile and Inject Version for Release
+      - name: Compile Main Firmware for Release
         run: |
-          mkdir -p build
+          mkdir -p build/main_firmware
           arduino-cli compile \
             --fqbn arduino:avr:nano \
-            --output-dir build \
+            --output-dir build/main_firmware \
             --build-property "compiler.cpp.extra_flags=-DVERSION=\"\\\"${{ steps.calc_version.outputs.new_version }}\\\"\"" \
             src/ExciterDriver/ExciterDriver.ino
+
+      - name: Compile Calibration Helper
+        run: |
+          mkdir -p build/calibration_helper
+          arduino-cli compile \
+            --fqbn arduino:avr:nano \
+            --output-dir build/calibration_helper \
+            src/CalibrationHelper/CalibrationHelper.ino
 
       - name: Create GitHub Release
         id: create_release
@@ -132,5 +134,7 @@ jobs:
           tag: ${{ steps.calc_version.outputs.new_tag }}
           name: Release ${{ steps.calc_version.outputs.new_tag }}
           generateReleaseNotes: true
-          artifacts: "build/ExciterDriver.ino.hex"
+          artifacts: |
+            build/main_firmware/ExciterDriver.ino.hex
+            build/calibration_helper/CalibrationHelper.ino.hex
           token: ${{ secrets.GITHUB_TOKEN }}
