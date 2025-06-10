@@ -29,6 +29,13 @@ on:
     branches:
       - dev
 
+# =========================================================================
+# == PERMISSIONS
+# =========================================================================
+permissions:
+  contents: write      # Allow creating releases and tags
+  pull-requests: read  # Allow reading PR content (needed for some actions)
+
 jobs:
   # =========================================================================
   # == JOB 1: Lint and compile the code on all triggers
