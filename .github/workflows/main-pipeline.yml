@@ -77,21 +77,39 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Version Prefix from Code
-        id: version_reader
+      - name: Calculate Next Version
+        id: calc_version
         run: |
+          # Step 1: Extract MAJOR.MINOR version from the source code
           VERSION_PREFIX=$(grep "#define VERSION" src/ExciterDriver/ExciterDriver.ino | sed -E 's/#define VERSION "([0-9]+\.[0-9]+)\..*/\1/')
-          echo "version_prefix=$VERSION_PREFIX" >> $GITHUB_OUTPUT
-      
-      - name: Calculate Next Patch Version
-        id: patch_version
-        uses: jefflinse/pr-semver-bump@v1.6.0
-        with:
-          version-prefix: 'v${{ steps.version_reader.outputs.version_prefix }}.'
-          bump-level: 'patch'
+          echo "Version prefix found: $VERSION_PREFIX"
+
+          # Step 2: Fetch all tags from the remote repository
+          git fetch --tags
+
+          # Step 3: Find the highest existing patch number for this MAJOR.MINOR version
+          # It looks for tags like 'v2.9.0', 'v2.9.1', etc.
+          LATEST_PATCH=$(git tag --list "v${VERSION_PREFIX}.*" | sed -E 's/v[0-9]+\.[0-9]+\.//' | sort -rn | head -n 1)
           
+          # Step 4: If no patch was found, start at -1 so the next is 0. Otherwise, use the found number.
+          if [[ -z "$LATEST_PATCH" ]]; then
+            LATEST_PATCH=-1
+          fi
+          echo "Latest patch for v${VERSION_PREFIX}.* is: $LATEST_PATCH"
+
+          # Step 5: Increment the patch number
+          NEXT_PATCH=$((LATEST_PATCH + 1))
+          echo "Next patch number will be: $NEXT_PATCH"
+          
+          # Step 6: Construct the new version string and tag
+          NEW_VERSION_STRING="${VERSION_PREFIX}.${NEXT_PATCH}"
+          NEW_TAG="v${NEW_VERSION_STRING}"
+          
+          # Step 7: Export these values for subsequent steps to use
+          echo "new_version=${NEW_VERSION_STRING}" >> $GITHUB_OUTPUT
+          echo "new_tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+
       - name: Set up Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -104,15 +122,15 @@ jobs:
           arduino-cli compile \
             --fqbn arduino:avr:nano \
             --output-dir build \
-            --build-property "compiler.cpp.extra_flags=-DVERSION=\"\\\"${{ steps.patch_version.outputs.next_version }}\\\"\"" \
+            --build-property "compiler.cpp.extra_flags=-DVERSION=\"\\\"${{ steps.calc_version.outputs.new_version }}\\\"\"" \
             src/ExciterDriver/ExciterDriver.ino
 
       - name: Create GitHub Release
         id: create_release
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.patch_version.outputs.next_tag }}
-          name: Release ${{ steps.patch_version.outputs.next_tag }}
+          tag: ${{ steps.calc_version.outputs.new_tag }}
+          name: Release ${{ steps.calc_version.outputs.new_tag }}
           generateReleaseNotes: true
           artifacts: "build/ExciterDriver.ino.hex"
           token: ${{ secrets.GITHUB_TOKEN }}
